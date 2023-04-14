@@ -76,24 +76,6 @@ int main(int argc, char **argv)
   // Call MPI_Finalize
   MPI_Finalize();
 
-  // // Define some variables
-  // double xMin = 0.0;                   
-  // double xMax = 1.0;
-  // double dx   = (xMax - xMin)/numCells;
-
-
-
-  // // Account for unequal load by making sure last processor has correct end
-  // if (myProcID == numProcs - 1) myEnd = numCells;
-  
-  // // Loop over cells and compute integral using trapezoidal rule
-  // double myResult = 0.0;
-  // for (int i = myStart; i < myEnd; ++i)
-  // {
-  //   double xL = xMin + i*dx;
-  //   double xR = xL + dx;
-  //   myResult += 0.5 * (myFunction(xL)+myFunction(xR)) * dx;
-  // }  
   return 0;
 }
 
