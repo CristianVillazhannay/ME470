@@ -11,10 +11,13 @@ void getXYZ(int i, int j, int k, int xOffset, int yOffset, int zOffset,
            double dx, double dy, double dz, double & x, double & y, double & z);
 void setBCs(MPI_Comm cartComm, int xSize, int ySize, int zSize, int xOffset, int yOffset,
             int zOffset, double dx, double dy, double dz, double * u);
-double jacobiSweep(int xSize, int ySize, int zSize, int xOffset, int yOffset, int zOffset,
+double jacobiSweep(double dt, int xSize, int ySize, int zSize, int xOffset, int yOffset, int zOffset,
                    double dx, double dy, double dz, const double * u, double * unew);
 void exchangeBoundaryData(MPI_Comm cartComm, int xSize, int ySize, int zSize, double * u);
 void setEqual(int xSize, int ySize, int zSize,const double * u1, double * u2);
+void outputToFile(MPI_Comm cartComm, double * u, int nx, int ny, int nz, int gridSizeX, int gridSizeY,
+                  int gridSizeZ, int xOffset, int yOffset, int zOffset, double dx, double dy, double dz);
+void writeToFile(const double * u, int nx, int ny, int nz, double dx, double dy, double dz);
 
 // double bcFunc(double x, double y);
 
@@ -98,7 +101,7 @@ int main(int argc, char **argv)
   while (iter < maxIters)
   {
   	//Call the function, and it should update the unew. 
-  	jacobiSweep(gridSizeX, gridSizeY, gridSizeZ, xOffset, yOffset, zOffset, 
+  	jacobiSweep(dt, gridSizeX, gridSizeY, gridSizeZ, xOffset, yOffset, zOffset, 
   							dx, dy, dz, u, unew);
 
   	//Exchange process data in unew. 
@@ -115,6 +118,8 @@ int main(int argc, char **argv)
   	std::cout << "After " << iter << "iterations, finished" << std::endl;
   }
 
+  // Output
+  outputToFile(cartComm, u, nx, ny, nz, gridSizeX, gridSizeY, gridSizeZ, xOffset, yOffset, zOffset, dx, dy, dz);
 
 	//Deallocate the dynamic memory for the u and unew arrays.
 	delete[] u;
@@ -245,7 +250,7 @@ void setBCs(MPI_Comm cartComm, int xSize, int ySize, int zSize, int xOffset, int
   //Front BC -- XY Plane
   if (cartCoords[2] == cartDims[2] - 1)
   {
-  	//Intialize the boundary value (x = Right)
+  	//Intialize the boundary value (z = 0)
     int k = 0;
 
     //Sweep over all the z and the x variables.
@@ -262,7 +267,7 @@ void setBCs(MPI_Comm cartComm, int xSize, int ySize, int zSize, int xOffset, int
   //Back BC -- XY Plane
   if (cartCoords[2] == cartDims[2] - 1)
   {
-  	//Intialize the boundary value (x = Right)
+  	//Intialize the boundary value (z = back)
     int k = zSize - 1;
 
     //Sweep over all the z and the x variables.
@@ -285,7 +290,7 @@ void getXYZ(int i, int j, int k, int xOffset, int yOffset, int zOffset,
   z = (k+zOffset) * dz;
 }
 
-double jacobiSweep(int xSize, int ySize, int zSize, int xOffset, int yOffset, int zOffset,
+double jacobiSweep(double dt, int xSize, int ySize, int zSize, int xOffset, int yOffset, int zOffset,
                    double dx, double dy, double dz, const double * u, double * unew)
 {
   double dx2 = dx*dx;
@@ -293,7 +298,7 @@ double jacobiSweep(int xSize, int ySize, int zSize, int xOffset, int yOffset, in
   double dz2 = dz*dz;
 
   double x, y, z;
-
+  //we avoid the edges of the grid.
   for (int k = 1; k < zSize - 1; ++k)
 	{
 	  for (int j = 1; j < ySize - 1; ++j)
@@ -308,7 +313,14 @@ double jacobiSweep(int xSize, int ySize, int zSize, int xOffset, int yOffset, in
 	    	double uF = u[(xSize * ySize) * (k + 1) + xSize * (j    ) + (i    )];
 	    	double ub = u[(xSize * ySize) * (k - 1) + xSize * (j    ) + (i    )];
 
-	      unew[(xSize * ySize) * k + xSize * j + i] = 0.1 * ((uR - 2 * uA + uL)/(dx2) + (uT - 2 * uA + uB)/(dy2) + (uF - 2 * uA + ub)/(dz2));
+	      unew[(xSize * ySize) * k + xSize * j + i] = uA + 0.1 * dt *((uR - 2 * uA + uL)/(dx2) + (uT - 2 * uA + uB)/(dy2) + (uF - 2 * uA + ub)/(dz2));
+
+	      getXYZ(i, j, k, xOffset, yOffset, zOffset, dx, dy, dz, x, y, z);
+
+        if (x == 0.5 && y == 0.5 && z == 0.5) {
+          std::cout << "uA: " << uA << std::endl;
+        }
+
 	    }
 	  }
 	}
@@ -325,13 +337,17 @@ void exchangeBoundaryData(MPI_Comm cartComm, int xSize, int ySize, int zSize, do
   //X row then up the Y rows.
   MPI_Type_contiguous(xSize * ySize, MPI_DOUBLE, &XY);
 
+
+  //Note that for these datatypes, the count * blocklength should be equal to the
+  //number of elements in the desired plane.
+
   //Creation of the YZ datatype. This will be a vector type that simply 
-  //reads up the column by skipping.
-  MPI_Type_vector(xSize * ySize, 1, xSize, MPI_DOUBLE, &YZ);
+  //reads up the column by skipping up through the xSize columns.
+  MPI_Type_vector(zSize * ySize,     1,         xSize, MPI_DOUBLE, &YZ);
 
   //Creation of the XZ datatype. This will be a vector type that skips 
   //up the entirity of the XZ plane to get back to the base row. 
-  MPI_Type_vector(xSize * ySize, xSize, xSize * ySize, MPI_DOUBLE, &XZ);
+  MPI_Type_vector(zSize, xSize, xSize * ySize, MPI_DOUBLE, &XZ);
 
   //Don't forget to commit your changes to the actual variable.
   MPI_Type_commit(&XY);
@@ -339,42 +355,43 @@ void exchangeBoundaryData(MPI_Comm cartComm, int xSize, int ySize, int zSize, do
   MPI_Type_commit(&XZ);
 
 
-  //Get the processes at the front, back, right left, up, and down. 
+  //Get the processes at the front, back, right left, up, and down. This will only 
+  //tell us the rank of the processes in the topology.
   int procR, procL, procU, procD, procF, procB;
   MPI_Cart_shift(cartComm, 0, 1, &procL, &procR);
-  MPI_Cart_shift(cartComm, 1, 1, &procD, &procR);
+  MPI_Cart_shift(cartComm, 1, 1, &procD, &procU);
   MPI_Cart_shift(cartComm, 2, 1, &procB, &procF);
 
   MPI_Status status;
 
   //Communicate up (send my top surface up, recv my bottom surface from down.)
-  MPI_Sendrecv(&u[xSize * (ySize -2)], 1, XZ, procU, 0,
-  						 &u[0], 1, XZ, procD, 0,
+  MPI_Sendrecv(&u[xSize * (ySize - 2)], 1, XZ, procU, 0,
+  						 &u[0], 								  1, XZ, procD, 0,
   						 cartComm, &status);
 
   //Communicate down (send my bottom surface down, recv my top surface from up.)
-  MPI_Sendrecv(&u[xSize], 1, XZ, procD, 0,
+  MPI_Sendrecv(&u[xSize], 						 1, XZ, procD, 0,
   						 &u[xSize * (ySize -1)], 1, XZ, procU, 0,
   						 cartComm, &status);
 
   //Communicate right (send my right surface right, recv my left surface from left.)
   MPI_Sendrecv(&u[xSize - 2], 1, YZ, procR, 0,
-  						 &u[0], 1, YZ, procL, 0,
+  						 &u[0], 				1, YZ, procL, 0,
   						 cartComm, &status);
 
   //Communicate left (send my left surface left, recv my left boundary from right.)
-  MPI_Sendrecv(&u[1], 1, YZ, procL, 0,
+  MPI_Sendrecv(&u[1], 				1, YZ, procL, 0,
   						 &u[xSize - 1], 1, YZ, procR, 0,
   						 cartComm, &status);
 
-  //Communicate forward (send my front surface forward, recv my back boundar from behind.)
-  MPI_Sendrecv(&u[2*(xSize * ySize)], 1, XY, procF, 0,
-  						 &u[(zSize-1)*(xSize*ySize)], 1, XY, procB, 0,
+  //Communicate forward (send my front surface forward, recv my back boundary from behind.)
+  MPI_Sendrecv(&u[xSize * ySize], 			1, XY, procF, 0,
+  						 &u[(zSize-2)*(xSize*ySize)], 1, XY, procB, 0,
   						 cartComm, &status);
 
   //Communicate back (send my back surface back, recv my front boundary from forward.)
-  MPI_Sendrecv(&u[(zSize-2)*(xSize*ySize)], 1, XZ, procB, 0,
-  						 &u[0], 1, XZ, procF, 0,
+  MPI_Sendrecv(&u[(zSize-2)*(xSize*ySize)], 1, XY, procB, 0,
+  						 &u[0], 											1, XY, procF, 0,
   						 cartComm, &status);
 
   //Free all the memory that was done.
@@ -397,6 +414,126 @@ void setEqual(int xSize, int ySize, int zSize,const double * u1, double * u2)
 	}
 }
 
+void outputToFile(MPI_Comm cartComm, double * u, int nx, int ny, int nz, int gridSizeX, int gridSizeY,
+                  int gridSizeZ, int xOffset, int yOffset, int zOffset, double dx, double dy, double dz)
+{
+  int myProcID, numProcs;
+  MPI_Comm_rank(cartComm, &myProcID);
+  MPI_Comm_size(cartComm, &numProcs);
+
+  // On process 0, allocate data for entire u array, as well as arrays
+  // to hold grid sizes and offsets gathered from individual procs
+  double * uAll;
+  int *gridSizeXArray, *gridSizeYArray, *gridSizeZArray, *xOffsetArray, *yOffsetArray, *zOffsetArray;
+  int fullSizeX = nx + 1;
+  int fullSizeY = ny + 1;
+  int fullSizeZ = nz + 1;
+  if (myProcID == 0)
+  {
+    uAll = new double[fullSizeX*fullSizeY*fullSizeZ];
+    gridSizeXArray = new int[numProcs];
+    gridSizeYArray = new int[numProcs];
+    gridSizeZArray = new int[numProcs];
+
+    xOffsetArray = new int[numProcs];
+    yOffsetArray = new int[numProcs];
+    zOffsetArray = new int[numProcs];
+  }
+
+  // Gather grid sizes and offsets
+  MPI_Gather(&gridSizeX, 1, MPI_INTEGER,
+             gridSizeXArray, 1, MPI_INTEGER, 0, cartComm);
+  MPI_Gather(&gridSizeY, 1, MPI_INTEGER,
+             gridSizeYArray, 1, MPI_INTEGER, 0, cartComm);
+  MPI_Gather(&gridSizeZ, 1, MPI_INTEGER,
+  					 gridSizeZArray, 1, MPI_INTEGER, 0, cartComm);
 
 
+  MPI_Gather(&xOffset, 1, MPI_INTEGER,
+             xOffsetArray, 1, MPI_INTEGER, 0, cartComm);
+  MPI_Gather(&yOffset, 1, MPI_INTEGER,
+             yOffsetArray, 1, MPI_INTEGER, 0, cartComm);
+  MPI_Gather(&zOffset, 1, MPI_INTEGER,
+  					 zOffsetArray, 1, MPI_INTEGER, 0, cartComm);
 
+  // On each processor, send grid data to process 0. Use non-blocking
+  // communication to avoid deadlock.
+  MPI_Request request;
+  MPI_Isend(u, gridSizeX*gridSizeY*gridSizeZ, MPI_DOUBLE, 0, 0, cartComm, &request);
+
+  // On process 0, loop over processes and receive the sub-block using
+  // a derived data type
+  if (myProcID == 0)
+  {
+    for (int proc = 0; proc < numProcs; ++proc)
+    {
+      MPI_Datatype subblockType;
+      int count = gridSizeYArray[proc]*gridSizeZArray[proc];
+      int length = gridSizeXArray[proc];
+      int stride = fullSizeX;
+
+      MPI_Type_vector(count, length, stride, MPI_DOUBLE, &subblockType);
+      MPI_Type_commit(&subblockType);
+
+
+      //represents the location of the []th array from the 2D one. 
+      double * recvPointer = &uAll[zOffsetArray[proc] * yOffsetArray[proc] * fullSizeX + yOffsetArray[proc] * fullSizeX + xOffsetArray[proc]];
+      MPI_Status status;
+
+
+      MPI_Recv(recvPointer, 1, subblockType, proc,
+               0, cartComm, &status);
+
+      MPI_Type_free(&subblockType);
+    }
+  }
+
+  MPI_Wait(&request, MPI_STATUS_IGNORE);
+  
+  // Output to file from proc 0
+  if (myProcID == 0)
+  {
+    writeToFile(uAll, fullSizeX, fullSizeY, fullSizeZ, dx, dy, dz);
+  }
+  
+  // Delete arrays on proc 0
+  if (myProcID == 0)
+  {
+    delete[] uAll;
+    delete[] gridSizeXArray;
+    delete[] gridSizeYArray;
+    delete[] xOffsetArray;
+    delete[] yOffsetArray;
+  }
+  
+}
+
+void writeToFile(const double * u, int nx, int ny, int nz, double dx, double dy, double dz)
+{
+  std::ofstream myFile;
+  myFile.open("poisson3D.dat");
+
+  const int width = 8;
+  const int prec = 5;
+
+  for (int k = 0; k < nz; ++k)
+  {
+  	double z = k*dz;
+	  for (int j = 0; j < ny; ++j)
+	  {
+	    double y = j*dy;
+	    for (int i = 0; i < nx; ++i)
+	    {
+	      double x = i*dx;
+	      double val = u[k*(nx*ny)+j*nx + i];
+	      char buf[256];
+	      char pattern[] = "%8.5f\t%8.5f\t%8.5f\t%8.5f";
+	      sprintf(buf, pattern, x, y, z, val);
+	      myFile << buf << std::endl;
+	    }
+	  }
+	}
+
+  myFile.close();
+  
+}
