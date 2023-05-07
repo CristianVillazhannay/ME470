@@ -243,7 +243,7 @@ void setBCs(MPI_Comm cartComm, int xSize, int ySize, int zSize, int xOffset, int
   }
 
   //Front BC -- XY Plane
-  if (cartCoords[2] == cartDims[2] - 1)
+  if (cartCoords[2] == 0)
   {
   	//Intialize the boundary value (z = 0)
     int k = 0;
@@ -293,7 +293,7 @@ double jacobiSweep(double dt, int xSize, int ySize, int zSize, int xOffset, int 
   double dz2 = dz*dz;
 
   double x, y, z;
-  
+
   //we avoid the edges of the grid.
   for (int k = 1; k < zSize - 1; ++k)
 	{
@@ -381,13 +381,13 @@ void exchangeBoundaryData(MPI_Comm cartComm, int xSize, int ySize, int zSize, do
   						 cartComm, &status);
 
   //Communicate forward (send my front surface forward, recv my back boundary from behind.)
-  MPI_Sendrecv(&u[xSize * ySize], 					1, XY, procF, 0,
-  						 &u[(zSize-1)*(xSize*ySize)], 1, XY, procB, 0,
+  MPI_Sendrecv(&u[xSize * ySize], 					1, XY, procB, 0,
+  						 &u[(zSize-1)*(xSize*ySize)], 1, XY, procF, 0,
   						 cartComm, &status);
 
   //Communicate back (send my back surface back, recv my front boundary from forward.)
-  MPI_Sendrecv(&u[(zSize-2)*(xSize*ySize)], 1, XY, procB, 0,
-  						 &u[0], 											1, XY, procF, 0,
+  MPI_Sendrecv(&u[(zSize-2)*(xSize*ySize)], 1, XY, procF, 0,
+  						 &u[0], 											1, XY, procB, 0,
   						 cartComm, &status);
 
   //Free all the memory that was done.
