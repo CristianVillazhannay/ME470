@@ -42,9 +42,6 @@ int main(int argc, char **argv)
 	int ny = 100;
 	int nz = 100;
 
-	//Set up our iteration and tolerance for our code
-	double tolerance = 1.0e-06;
-
 	//Compute the difference in between cells
 	double dx = Lx/nx;
 	double dy = Ly/ny;
@@ -55,7 +52,7 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &myProcID);
 	MPI_Comm_size(MPI_COMM_WORLD, &numProcs);	
 
-	//Setup our Cartesion topology
+	//Setup our Cartesian topology
 	int ndims = 3; 
 	int dims[3] = {0, 0, 0};
 	MPI_Dims_create(numProcs, ndims, dims);
@@ -296,6 +293,7 @@ double jacobiSweep(double dt, int xSize, int ySize, int zSize, int xOffset, int 
   double dz2 = dz*dz;
 
   double x, y, z;
+  
   //we avoid the edges of the grid.
   for (int k = 1; k < zSize - 1; ++k)
 	{
@@ -311,12 +309,12 @@ double jacobiSweep(double dt, int xSize, int ySize, int zSize, int xOffset, int 
 	    	double uF = u[(xSize * ySize) * (k + 1) + xSize * (j    ) + (i    )];
 	    	double ub = u[(xSize * ySize) * (k - 1) + xSize * (j    ) + (i    )];
 
-	      unew[(xSize * ySize) * k + xSize * j + i] = uA + 0.1 * dt *((uR - 2 * uA + uL)/(dx2) + (uT - 2 * uA + uB)/(dy2) + (uF - 2 * uA + ub)/(dz2));
+	      unew[(xSize * ySize) * k + xSize * j + i] = uA + (double)0.1 * dt *((uR - (double)2 * uA + uL)/(dx2) + (uT - (double)2 * uA + uB)/(dy2) + (uF - (double)2 * uA + ub)/(dz2));
 
 	      getXYZ(i, j, k, xOffset, yOffset, zOffset, dx, dy, dz, x, y, z);
 
         if (x == 0.5 && y == 0.5 && z == 0.5) {
-          std::cout << "uA: " << uA << std::endl;
+          //std::cout << "uA: " << uA << std::endl;
           dataWrite(uA);
         }
 
@@ -336,13 +334,12 @@ void exchangeBoundaryData(MPI_Comm cartComm, int xSize, int ySize, int zSize, do
   //X row then up the Y rows.
   MPI_Type_contiguous(xSize * ySize, MPI_DOUBLE, &XY);
 
-
   //Note that for these datatypes, the count * blocklength should be equal to the
   //number of elements in the desired plane.
 
   //Creation of the YZ datatype. This will be a vector type that simply 
   //reads up the column by skipping up through the xSize columns.
-  MPI_Type_vector(zSize * ySize,     1,         xSize, MPI_DOUBLE, &YZ);
+  MPI_Type_vector(zSize * ySize,     1, xSize, MPI_DOUBLE, &YZ);
 
   //Creation of the XZ datatype. This will be a vector type that skips 
   //up the entirity of the XZ plane to get back to the base row. 
@@ -384,8 +381,8 @@ void exchangeBoundaryData(MPI_Comm cartComm, int xSize, int ySize, int zSize, do
   						 cartComm, &status);
 
   //Communicate forward (send my front surface forward, recv my back boundary from behind.)
-  MPI_Sendrecv(&u[xSize * ySize], 			1, XY, procF, 0,
-  						 &u[(zSize-2)*(xSize*ySize)], 1, XY, procB, 0,
+  MPI_Sendrecv(&u[xSize * ySize], 					1, XY, procF, 0,
+  						 &u[(zSize-1)*(xSize*ySize)], 1, XY, procB, 0,
   						 cartComm, &status);
 
   //Communicate back (send my back surface back, recv my front boundary from forward.)
@@ -440,6 +437,7 @@ void outputToFile(MPI_Comm cartComm, double * u, int nx, int ny, int gridSizeX, 
              gridSizeXArray, 1, MPI_INTEGER, 0, cartComm);
   MPI_Gather(&gridSizeY, 1, MPI_INTEGER,
              gridSizeYArray, 1, MPI_INTEGER, 0, cartComm);
+
   MPI_Gather(&xOffset, 1, MPI_INTEGER,
              xOffsetArray, 1, MPI_INTEGER, 0, cartComm);
   MPI_Gather(&yOffset, 1, MPI_INTEGER,
@@ -519,10 +517,12 @@ void writeToFile(const double * u, int nx, int ny, double dx, double dy)
 void dataWrite(double u)
 {
   std::ofstream myFile;
-  myFile.open("middle.dat", std::ios_base::app); //append not overwrite
+  //append not overwrite. This means that middle.dat needs to be deleted everytime this is run.
+  myFile.open("middle.dat", std::ios_base::app);
 
+  //Change the precision to be able to read at least 6 sig. figs.
   char buf[256];
-  char pattern[] = "%1.8f\t";
+  char pattern[] = "%1.8f\t"; 
   sprintf(buf, pattern, u);
   myFile << buf << std::endl;
 
