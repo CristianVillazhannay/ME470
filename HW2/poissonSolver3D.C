@@ -94,7 +94,7 @@ int main(int argc, char **argv)
   int iter = 0; 
 
   //Set our arbitrary time in the past
-  double t1 = MPI_WTime();
+  double t1 = MPI_Wtime();
 
   //Iteration Loops
   while (iter < maxIters)
@@ -113,11 +113,11 @@ int main(int argc, char **argv)
   }
 
   //Set the time that we want to measure
-  double t2 = MPI_WTime();
+  double t2 = MPI_Wtime();
 
   if (myProcID == 0)
   {
-    std::cout << "After " << iter << " iterations, finished with du = " << diff << std::endl;
+    std::cout << "After " << iter << " iterations, finished" << std::endl;
     std::cout << "MPI_Wtime measured " << t1 << " and " << t2 << "seconds"<< std::endl;
     std::cout << "MPI_Wtime measured " << t1 - t2 << "seconds"<< std::endl;
   }

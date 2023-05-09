@@ -10,4 +10,12 @@
 module purge all
 module load mpi 
 
+mpirun -np 1 poissonSolver3D
+
+mpirun -np 2 poissonSolver3D
+
+mpirun -np 4 poissonSolver3D
+
 mpirun -np 8 poissonSolver3D
+
+mpirun -np 16 poissonSolver3D
