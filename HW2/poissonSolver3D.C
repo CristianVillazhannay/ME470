@@ -113,12 +113,28 @@ int main(int argc, char **argv)
     setEqual(gridSizeX, gridSizeY, gridSizeZ, unew, u);
   }
 
-  //outputToFile(cartComm, u_slice, nx, ny, gridSizeX, gridSizeY, xOffset, yOffset, dx, dy);
+  //Create the u_slice that we are going to use to MATLAB plot.
+  double * u_slice = new double(gridSizeX * gridSizeY);
+  int k_Off;
+
+	//Our data is in 3D so we need to find the offset to get the XY plane.
+  k_Off = (0.5/dz) - zOffset; 
+
+  for (int j = 0; j < gridSizeY; ++ j)
+  {
+    for (int i = 0; i < gridSizeX; ++i)
+    {
+      u_slice[gridSizeX * j + i] = u[k_Off*(gridSizeX * gridSizeY) + gridSizeX* j + i];
+    }
+  }
+
+  // outputToFile(cartComm, u_slice, nx, ny, gridSizeX, gridSizeY, xOffset, yOffset, dx, dy);
   //outputToFile(cartComm, u, nx, ny, nz, gridSizeX, gridSizeY, gridSizeZ, xOffset, yOffset, zOffset, dx, dy, dz);
 
 	//Deallocate the dynamic memory for the u and unew arrays.
 	delete[] u;
 	delete[] unew;
+	delete[] u_slice;
 
 	//Finalize MPI. End parallel code. 
 	MPI_Finalize();
@@ -314,7 +330,7 @@ double jacobiSweep(double dt, int xSize, int ySize, int zSize, int xOffset, int 
 	      getXYZ(i, j, k, xOffset, yOffset, zOffset, dx, dy, dz, x, y, z);
 
         if (x == 0.5 && y == 0.5 && z == 0.5) {
-          //std::cout << "uA: " << uA << std::endl;
+          std::cout << "uA: " << uA << std::endl;
           dataWrite(uA);
         }
 
@@ -437,7 +453,6 @@ void outputToFile(MPI_Comm cartComm, double * u, int nx, int ny, int gridSizeX, 
              gridSizeXArray, 1, MPI_INTEGER, 0, cartComm);
   MPI_Gather(&gridSizeY, 1, MPI_INTEGER,
              gridSizeYArray, 1, MPI_INTEGER, 0, cartComm);
-
   MPI_Gather(&xOffset, 1, MPI_INTEGER,
              xOffsetArray, 1, MPI_INTEGER, 0, cartComm);
   MPI_Gather(&yOffset, 1, MPI_INTEGER,
