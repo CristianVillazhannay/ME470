@@ -37,6 +37,7 @@ Temporary Items
 # End of https://www.toptal.com/developers/gitignore/api/macos 
 
 .vscode/*
+.vscode
 
 # Local History for Visual Studio Code
 .history/
