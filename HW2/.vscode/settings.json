@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "poissonSolver2D.C": "cpp",
+        "poissonSolver3D.C": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
+}
