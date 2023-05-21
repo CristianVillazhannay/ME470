@@ -8,9 +8,13 @@ void writeValues(int n, const double *t, const PetscScalar *u, const char file[]
 
 int main(int argc, char **argv)
 {
-	
-  int max = 20;
   PetscInitialize(&argc, &argv, (char*)0, help);
+
+  //Initialize the name flag for the output .dat 
+  int max = 20;
+  char name[20];
+  PetscBool set; 
+  PetscOptionsGetString(NULL, "-name", name, max, &set);
 
   // Set some parameters
   double D = 0.1;
@@ -182,7 +186,7 @@ int main(int argc, char **argv)
     // (note that this also gives the correct value on the boundary nodes, b = 0
     // TODO: Use PETSc matrix-vector operations to set b = un - J*unp1
     // (See p. 44 and p. 66 in the PETSc Users Manual) 
-    MatMult(J,unp1,&b);
+    MatMult(J,unp1,b);
     VecAYPX(b, -1, un);
 
     // Solve for du
@@ -225,7 +229,7 @@ int main(int argc, char **argv)
   // TODO: Consider using command line options to set a filename instead of umiddle.dat (not required)
   if (haveMiddle)
   {
-    writeValues(numTimeSteps+1, timeValues, uMidValues, "umiddle.dat");
+    writeValues(numTimeSteps+1, timeValues, uMidValues, name);
   }
   
   // Clean up
