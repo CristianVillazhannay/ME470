@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 
       // TODO: Uncomment and fix the next 3 lines
       int cols[7] = {Iimjk, Iipjk, Iijmk, Iijpk,Iijkm,Iijkp,Iijk};
-      PetscScalar vals[7] = {1./dx2, 1./dx2, 1./dy2, 1./dy2, 1./dz2, 1./dz2, -2*(1./dx2 + 1./dy2 + 1./dz2)};
+      PetscScalar vals[7] = {(-1 * D * dt)/dx2, (-1 * D * dt)/dx2, (-1 * D * dt)/dy2, (-1 * D * dt)/dy2, (-1 * D * dt)/dz2, (-1 * D * dt)/dz2, 1 + 2*((D * dt)/dx2 + (D * dt)/dy2 + (D * dt)/dz2)};
       MatSetValues(J, 1, &I, 7, cols, vals, INSERT_VALUES);
     }
   }
